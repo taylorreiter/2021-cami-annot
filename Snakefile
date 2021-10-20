@@ -1,18 +1,16 @@
-DATASETS = ['CAMI_low']
+import pandas as pd
 
-def checkpoint_output_decompress_source_genomes(wildcards):
-    # checkpoint_output encodes the output dir from the checkpoint rule.
-    checkpoint_output = checkpoints.decompress_source_genomes.get(**wildcards).output[0]    
-    file_names = expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations",
-                        source_genome = glob_wildcards(os.path.join(checkpoint_output, "{source_genome}")).source_genome)
-    file_names.remove("outputs/eggnog_source_genomes/.snakemake_timestamp.emapper.annotations")
-    #file_names = file_name[:-1]
-    return file_names
+m = pd.read_csv("inputs/CAMI_low_genomes_and_contigs.tsv", sep = "\t", header = 0)
+SOURCE_GENOMES = m['BINID'].unique().tolist()
+CONTIGS = m['contig'].unique().tolist()
+GENOMES_AND_CONTIGS = m['genome_and_contig'].unique().tolist()
+
+DATASETS = ['CAMI_low']
 
 rule all:
     input:
-        #expand("outputs/bowtie2/{dataset}_unmapped.fa", dataset = DATASETS),
-        checkpoint_output_decompress_source_genomes
+        expand("outputs/bowtie2/{dataset}_unmapped.fa", dataset = DATASETS),
+        expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)
 
 #############################################################
 ## Obtaining data
@@ -136,22 +134,41 @@ rule convert_unmapped_reads_to_fastq:
 ## Generating silver-standard annotations of source genomes
 ############################################################
 
-checkpoint decompress_source_genomes:
+rule decompress_source_genomes:
     input: "inputs/CAMI_low/source_genomes_low.tar.gz"
-    output: directory("inputs/CAMI_low/source_genomes")
+    output: expand("inputs/CAMI_low/source_genomes/{source_genome}.fna", source_genome = SOURCE_GENOMES)
     shell:'''
     tar xvf {input} -C inputs/CAMI_low
-    # these next two lines are probably not the best idea, but the fai can be regenerated easily
-    # while its not clear that the circular_one_repeats were used to build the reads.
-    # I think if I don't move them out of this directory, I won't be able to properly solve for
-    # the root source genome names for downstream rules. It's annoying that the source fasta
-    # files shipped with two file endings, *fasta and *fna. 
-    rm {output}/*fai
-    mv {output}/circular_one_repeat inputs/CAMI_low
+    # these next few lines are a very poor idea, but the source genomes
+    # 1) have two separate file endings (fasta, fna);
+    # 2) the file prefix does not match the genome identifier used by the rest of the
+    #    documents in CAMI low.
+    # The following lines 
+    # 1) give all source genomes the same file ending (.fna)
+    # 2) unify the source genome file prefixes with those used in the rest of the 
+    #    CAMI low documents.  
+    for infile in inputs/CAMI_low/source_genomes/*fasta 
+    do
+    bn=$(basename $infile .fasta)
+    mv $infile ${{bn}}.fna
+    done
+    
+    for infile in *.gt1kb.fna
+    do
+    bn=$(basename $infile .gt1kb.fna)
+    mv $infile ${{bn}}.fna
+    done
+
+    mv 1139_AG_run158_run162.final.scaffolds.fna 1139_AG.fna
+    mv 1220_AD_run172_run176.final.scaffolds.fna 1220_AD.fna
+    mv 1220_AJ_run172_run176_run188.final.scaffolds.fna 1220_AJ.fna
+    mv 1285_BH_run189.final.scaffolds.fna 1285_BH.fna
+    mv 1286_AP_run191_run197.final.scaffolds.fna 1286_AP.fna
+    mv 1365_A_run201.final.scaffolds.fna 1365_A.fna
     '''
 
 rule prokka_source_genomes:
-    input: "inputs/CAMI_low/source_genomes/{source_genome}"
+    input: ancient("inputs/CAMI_low/source_genomes/{source_genome}.fna")
     output: 
         "outputs/prokka_source_genomes/{source_genome}.faa",
         "outputs/prokka_source_genomes/{source_genome}.gff",
