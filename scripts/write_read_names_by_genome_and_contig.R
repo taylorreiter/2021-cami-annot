@@ -2,7 +2,7 @@ library(readr)
 library(dplyr)
 library(tidyr)
 
-gs_read_mapping <- read_tsv("inputs/CAMI_low/gs_read_mapping.binning.gz", 
+gs_read_mapping <- read_tsv(snakemake@input[['gs']], 
                             #n_max = 10000,
                             comment = "@",
                             col_names = c("SEQUENCEID", "BINID", "TAXID", "READID"))
@@ -20,4 +20,4 @@ gs_read_mapping_r1_r2 %>%
   separate(col = READID, into = c("contig", "unk"), sep = "-") %>%
   select(-TAXID, -unk) %>%
   group_by(BINID, contig) %>%
-  group_walk(~ write_tsv(., paste0("outputs/test/", .y$BINID, "-", .y$contig, ".txt"), col_names = F))
+  group_walk(~ write_tsv(., paste0("outputs/gs_read_mapping/", .y$BINID, "-", .y$contig, ".txt"), col_names = F))
