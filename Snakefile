@@ -3,14 +3,15 @@ import pandas as pd
 m = pd.read_csv("inputs/CAMI_low_genomes_and_contigs.tsv", sep = "\t", header = 0)
 SOURCE_GENOMES = m['BINID'].unique().tolist()
 CONTIGS = m['contig'].unique().tolist()
-GENOMES_AND_CONTIGS = m['genome_and_contig'].unique().tolist()
+SOURCE_GENOME_AND_CONTIG= m['genome_and_contig'].unique().tolist()
 
 DATASETS = ['CAMI_low']
 
 rule all:
     input:
         expand("outputs/bowtie2/{dataset}_unmapped.fa", dataset = DATASETS),
-        expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)
+        ancient(expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)),
+        expand("outputs/bowtie2_source_genome_contigs/{source_genome_and_contig}.bam", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG) 
 
 #############################################################
 ## Obtaining data
@@ -20,7 +21,7 @@ rule download_CAMI:
     output: "inputs/CAMI_low.tar"
     threads: 1
     resources: 
-        mem_mb = "500"
+        mem_mb = 500
     shell:'''
     wget https://ftp.cngb.org/pub/gigadb/pub/10.5524/100001_101000/100344/ChallengeDatasets.dir/CAMI_low.tar
     '''
@@ -29,7 +30,7 @@ rule decompress_CAMI:
     input: "inputs/CAMI_low.tar"
     threads: 1
     resources: 
-        mem_mb = "500"
+        mem_mb = 500
     output: 
         "inputs/CAMI_low/RL_S001__insert_270.fq.gz",
         "inputs/CAMI_low/source_genomes_low.tar.gz",
@@ -54,7 +55,7 @@ rule fastp:
         r2 = "outputs/fastp/{dataset}_R2.fastp.fq.gz",
         json = "outputs/fastp/{dataset}.json",
         html = "outputs/fastp/{dataset}.html"
-    resources: mem_mb = "8000"
+    resources: mem_mb = 8000
     threads: 8
     benchmark: "benchmarks/fastp_{dataset}.txt"
     conda: "envs/fastp.yml"
@@ -145,7 +146,7 @@ rule decompress_source_genomes:
     output: expand("inputs/CAMI_low/source_genomes/{source_genome}.fna", source_genome = SOURCE_GENOMES)
     threads: 1
     resources: 
-        mem_mb = "500"
+        mem_mb = 500
     shell:'''
     tar xvf {input} -C inputs/CAMI_low
     # these next few lines are a very poor idea, but the source genomes
@@ -260,5 +261,26 @@ rule split_source_genomes_by_contig:
     '''
 
 rule index_source_genome_contigs:
+    input: "outputs/source_genome_contigs/{source_genome}-{contig}.fa"
+    output: "outputs/bowtie2_index_source_genome_contigs/{source_genome}-{contig}.1.bt2"
+    resources: mem_mb = 2000
+    params: prefix = lambda wildcards: "outputs/bowtie2_index_source_genome_contigs/" + wildcards.source_genome + "-" + wildcards.contig
+    conda: "envs/bowtie2.yml"
+    threads: 1
+    shell:'''
+    bowtie2-build {input} {params.prefix}
+    '''
 
 rule map_reads_to_source_genome_contig:
+    input:
+        index="outputs/bowtie2_index_source_genome_contigs/{source_genome}-{contig}.1.bt2",
+        fq = "outputs/gs_read_mapping/{source_genome}-{contig}.fq",
+    output: "outputs/bowtie2_source_genome_contigs/{source_genome}-{contig}.bam"
+    params: prefix = lambda wildcards: "outputs/bowtie2_index_source_genome_contigs/" + wildcards.source_genome + "-" + wildcards.contig
+    resources: mem_mb = 2000
+    conda: "envs/bowtie2.yml"
+    threads: 1
+    shell:'''
+    bowtie2 -x {params.prefix} --interleaved {input.fq} -p {threads} --end-to-end | \
+    samtools view -Sbh --threads {threads} - > {output}
+    '''
