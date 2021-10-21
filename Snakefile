@@ -18,6 +18,7 @@ rule all:
 
 rule download_CAMI:
     output: "inputs/CAMI_low.tar"
+    threads: 1
     resources: 
         mem_mb = "500"
     shell:'''
@@ -26,6 +27,9 @@ rule download_CAMI:
 
 rule decompress_CAMI:
     input: "inputs/CAMI_low.tar"
+    threads: 1
+    resources: 
+        mem_mb = "500"
     output: 
         "inputs/CAMI_low/RL_S001__insert_270.fq.gz",
         "inputs/CAMI_low/source_genomes_low.tar.gz",
@@ -68,6 +72,7 @@ rule assemble:
     output: "outputs/megahit/{dataset}.contigs.fa"
     params: outdir = lambda wildcards: "outputs/megahit/" + wildcards.dataset + "_tmp/"
     resources: mem_mb = 32000
+    threads: 1
     benchmark: "benchmarks/megahit_{dataset}.txt"
     conda: "envs/megahit.yml"
     shell:'''
@@ -114,6 +119,7 @@ rule identify_unmapped_reads:
     output: "outputs/bowtie2/{dataset}_unmapped.sam"
     resources: mem_mb = 8000
     benchmark: "benchmarks/samtools_f4_{dataset}.txt"
+    threads: 1
     conda: 'envs/bowtie2.yml'
     shell:'''
     samtools view -f 4 {input} > {output}
@@ -137,6 +143,9 @@ rule convert_unmapped_reads_to_fastq:
 rule decompress_source_genomes:
     input: "inputs/CAMI_low/source_genomes_low.tar.gz"
     output: expand("inputs/CAMI_low/source_genomes/{source_genome}.fna", source_genome = SOURCE_GENOMES)
+    threads: 1
+    resources: 
+        mem_mb = "500"
     shell:'''
     tar xvf {input} -C inputs/CAMI_low
     # these next few lines are a very poor idea, but the source genomes
@@ -178,7 +187,7 @@ rule prokka_source_genomes:
     conda: 'envs/prokka.yml'
     params: 
         outdir = 'outputs/prokka_source_genomes/',
-        lt = lambda wildcards: wildcards.source_genome.split(".")[0]
+        lt = lambda wildcards: wildcards.source_genome
     threads: 1
     shell:'''
     prokka {input} --outdir {params.outdir} --prefix {wildcards.source_genome} \
@@ -214,3 +223,42 @@ rule eggnog_annotate_source_genomes:
        --seed_ortholog_score 60 --override --temp_dir tmp/ \
        -d 2 --data_dir {params.dbdir}
     '''
+
+#########################################################################
+## Determine read base pair coordinates in source_genomes
+#########################################################################
+
+rule write_read_names_by_genome_and_contig:
+    input: gs = "inputs/CAMI_low/gs_read_mapping.binning.gz"
+    output: "outputs/gs_read_mapping/{source_genome}-{contig}.txt" 
+    conda: "envs/tidyverse.yml"
+    resources:
+        mem_mb = 32000
+    threads: 1
+    script: "scripts/write_read_names_by_genome_and_contig.R"
+
+rule split_reads_by_genome_and_contig:
+    input: 
+        lst="outputs/gs_read_mapping/{source_genome}-{contig}.txt",
+        fq="inputs/CAMI_low/RL_S001__insert_270.fq.gz"
+    output: "outputs/gs_read_mapping/{source_genome}-{contig}.fq"
+    conda: "envs/seqtk.yml"
+    resources:
+        mem_mb = 2000
+    threads: 1
+    shell:'''
+    seqtk subseq {input.fq} {input.lst} > {output}
+    '''
+
+rule split_source_genomes_by_contig:
+    input: "inputs/CAMI_low/source_genomes/{source_genome}.fna"
+    output: "outputs/source_genome_contigs/{source_genome}-{contig}.fa"
+    resources: mem_mb = 2000
+    threads: 1
+    shell:'''
+    grep -A 1 {wildcards.contig} {input} > {output}
+    '''
+
+rule index_source_genome_contigs:
+
+rule map_reads_to_source_genome_contig:
