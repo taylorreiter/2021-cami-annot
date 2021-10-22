@@ -231,7 +231,7 @@ rule eggnog_annotate_source_genomes:
 
 rule write_read_names_by_genome_and_contig:
     input: gs = "inputs/CAMI_low/gs_read_mapping.binning.gz"
-    output: "outputs/gs_read_mapping/{source_genome}-{contig}.txt" 
+    output: expand("outputs/gs_read_mapping/{source_genome_and_contig}.txt", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG) 
     conda: "envs/tidyverse.yml"
     resources:
         mem_mb = 32000
