@@ -1,5 +1,7 @@
 import pandas as pd
 
+TMPDIR = "/scratch/tereiter"
+
 m = pd.read_csv("inputs/CAMI_low_genomes_and_contigs.tsv", sep = "\t", header = 0)
 SOURCE_GENOMES = m['BINID'].unique().tolist()
 CONTIGS = m['contig'].unique().tolist()
@@ -21,7 +23,8 @@ rule download_CAMI:
     output: "inputs/CAMI_low.tar"
     threads: 1
     resources: 
-        mem_mb = 500
+        mem_mb = 500,
+        tmpdir = TMPDIR
     shell:'''
     wget https://ftp.cngb.org/pub/gigadb/pub/10.5524/100001_101000/100344/ChallengeDatasets.dir/CAMI_low.tar
     '''
@@ -30,7 +33,8 @@ rule decompress_CAMI:
     input: "inputs/CAMI_low.tar"
     threads: 1
     resources: 
-        mem_mb = 500
+        mem_mb = 500,
+        tmpdir = TMPDIR
     output: 
         "inputs/CAMI_low/RL_S001__insert_270.fq.gz",
         "inputs/CAMI_low/source_genomes_low.tar.gz",
@@ -55,7 +59,9 @@ rule fastp:
         r2 = "outputs/fastp/{dataset}_R2.fastp.fq.gz",
         json = "outputs/fastp/{dataset}.json",
         html = "outputs/fastp/{dataset}.html"
-    resources: mem_mb = 8000
+    resources: 
+        mem_mb = 8000,
+        tmpdir=TMPDIR
     threads: 8
     benchmark: "benchmarks/fastp_{dataset}.txt"
     conda: "envs/fastp.yml"
@@ -72,7 +78,9 @@ rule assemble:
         r2 = "outputs/fastp/{dataset}_R2.fastp.fq.gz",
     output: "outputs/megahit/{dataset}.contigs.fa"
     params: outdir = lambda wildcards: "outputs/megahit/" + wildcards.dataset + "_tmp/"
-    resources: mem_mb = 32000
+    resources:
+        mem_mb = 32000,
+        tmpdir=TMPDIR
     threads: 1
     benchmark: "benchmarks/megahit_{dataset}.txt"
     conda: "envs/megahit.yml"
@@ -87,7 +95,9 @@ rule index_assembly:
     """
     input: "outputs/megahit/{dataset}.contigs.fa"
     output: "outputs/bowtie2_index/{dataset}.1.bt2"
-    resources: mem_mb = 8000
+    resources: 
+        mem_mb = 8000,
+        tmpdir=TMPDIR
     params: prefix = lambda wildcards: "outputs/bowtie2_index/" + wildcards.dataset
     benchmark: "benchmarks/bowtie2_index_{dataset}.txt"
     conda: "envs/bowtie2.yml"
@@ -106,7 +116,9 @@ rule map_reads_to_assembly:
         r2 = "outputs/fastp/{dataset}_R2.fastp.fq.gz",
     output: "outputs/bowtie2/{dataset}.bam"
     params: prefix = lambda wildcards: "outputs/bowtie2_index/" + wildcards.dataset
-    resources: mem_mb = 8000
+    resources: 
+        mem_mb = 8000,
+        tmpdir=TMPDIR
     benchmark: "benchmarks/bowtie2_{dataset}.txt"
     conda: "envs/bowtie2.yml"
     threads: 8
@@ -118,7 +130,9 @@ rule map_reads_to_assembly:
 rule identify_unmapped_reads:
     input: "outputs/bowtie2/{dataset}.bam"
     output: "outputs/bowtie2/{dataset}_unmapped.sam"
-    resources: mem_mb = 8000
+    resources: 
+        mem_mb = 8000,
+        tmpdir=TMPDIR
     benchmark: "benchmarks/samtools_f4_{dataset}.txt"
     threads: 1
     conda: 'envs/bowtie2.yml'
@@ -129,7 +143,9 @@ rule identify_unmapped_reads:
 rule convert_unmapped_reads_to_fastq:
     input: "outputs/bowtie2/{dataset}_unmapped.sam"
     output: "outputs/bowtie2/{dataset}_unmapped.fa"
-    resources: mem_mb = 8000
+    resources: 
+        mem_mb = 8000,
+        tmpdir=TMPDIR
     benchmark: "benchmarks/samtools_fasta_{dataset}.txt"
     conda: 'envs/bowtie2.yml'
     threads: 1
@@ -146,7 +162,8 @@ rule decompress_source_genomes:
     output: expand("inputs/CAMI_low/source_genomes/{source_genome}.fna", source_genome = SOURCE_GENOMES)
     threads: 1
     resources: 
-        mem_mb = 500
+        mem_mb = 500,
+        tmpdir=TMPDIR
     shell:'''
     tar xvf {input} -C inputs/CAMI_low
     # these next few lines are a very poor idea, but the source genomes
@@ -177,29 +194,44 @@ rule decompress_source_genomes:
     mv 1365_A_run201.final.scaffolds.fna 1365_A.fna
     '''
 
-rule prokka_source_genomes:
-    input: ancient("inputs/CAMI_low/source_genomes/{source_genome}.fna")
+# uncomment to download db; use db that was downloaded for another project
+# rule download_bakta_db:
+#    output: "inputs/bakta_db/db/version.json"
+#    threads: 1
+#    resources: mem_mb = 4000
+#    conda: "envs/bakta.yml"
+#    shell:'''
+#    bakta_db download --output {output}
+#    '''
+
+rule bakta_source_genomes:
+    input: 
+        fna=ancient("inputs/CAMI_low/source_genomes/{source_genome}.fna"),
+        db="~/github/2021-orpheum-refseq/inputs/bakta_db/db/version.json"
     output: 
-        "outputs/prokka_source_genomes/{source_genome}.faa",
-        "outputs/prokka_source_genomes/{source_genome}.gff",
-        "outputs/prokka_source_genomes/{source_genome}.fna",
-    resources: mem_mb = 8000
-    benchmark: "benchmarks/prokka_{source_genome}.txt"
-    conda: 'envs/prokka.yml'
+        "outputs/bakta_source_genomes/{source_genome}.faa",
+        "outputs/bakta_source_genomes/{source_genome}.gff3",
+        "outputs/bakta_source_genomes/{source_genome}.fna",
+    resources: 
+        mem_mb = lambda wildcards, attempt: attempt * 8000 ,
+        tmpdir= TMPDIR
+    benchmark: "benchmarks/bakta_{source_genome}.txt"
+    conda: 'envs/bakta.yml'
     params: 
-        outdir = 'outputs/prokka_source_genomes/',
-        lt = lambda wildcards: wildcards.source_genome
+        dbdir="~/github/2021-orpheum-refseq/inputs/bakta_db/db/"
+        outdir = 'outputs/bakta_source_genomes/',
     threads: 1
     shell:'''
-    prokka {input} --outdir {params.outdir} --prefix {wildcards.source_genome} \
-        --force --locustag {params.lt} --cpus {threads} \
-        --compliant --centre X
+    bakta --db {params.dbdir} --prefix {wildcards.source_genome} --output {params.outdir} \
+        --locus-tag {wildcards.source_genome} --keep-contig-headers {input.fna}
     '''
 
 rule download_eggnog_db:
     output: "inputs/eggnog_db/eggnog.db"
     threads: 1   
-    resources: mem_mb = 1000
+    resources: 
+        mem_mb = 4000,
+        tmpdir=TMPDIR
     conda: "envs/eggnog.yml"
     shell:'''
     download_eggnog_data.py -H -d 2 -y --data_dir inputs/eggnog_db
@@ -207,12 +239,13 @@ rule download_eggnog_db:
 
 rule eggnog_annotate_source_genomes:
     input: 
-        faa = "outputs/prokka_source_genomes/{source_genome}.faa",
+        faa = "outputs/bakta_source_genomes/{source_genome}.faa",
         db = 'inputs/eggnog_db/eggnog.db'
     output: "outputs/eggnog_source_genomes/{source_genome}.emapper.annotations"
     conda: 'envs/eggnog.yml'
     resources:
-        mem_mb = 32000
+        mem_mb = 32000,
+        tmpdir=TMPDIR
     threads: 8
     params: 
         outdir = "outputs/eggnog_source_genomes/",
@@ -234,7 +267,8 @@ rule write_read_names_by_genome_and_contig:
     output: expand("outputs/gs_read_mapping/{source_genome_and_contig}.txt", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG) 
     conda: "envs/tidyverse.yml"
     resources:
-        mem_mb = 32000
+        mem_mb = 128000,
+        tmpdir=TMPDIR
     threads: 1
     script: "scripts/write_read_names_by_genome_and_contig.R"
 
@@ -245,7 +279,8 @@ rule split_reads_by_genome_and_contig:
     output: "outputs/gs_read_mapping/{source_genome}-{contig}.fq"
     conda: "envs/seqtk.yml"
     resources:
-        mem_mb = 2000
+        mem_mb = 2000,
+        tmpdir=TMPDIR
     threads: 1
     shell:'''
     seqtk subseq {input.fq} {input.lst} > {output}
@@ -254,7 +289,9 @@ rule split_reads_by_genome_and_contig:
 rule split_source_genomes_by_contig:
     input: "inputs/CAMI_low/source_genomes/{source_genome}.fna"
     output: "outputs/source_genome_contigs/{source_genome}-{contig}.fa"
-    resources: mem_mb = 2000
+    resources: 
+        mem_mb = 2000,
+        tmpdir=TMPDIR
     threads: 1
     shell:'''
     grep -A 1 {wildcards.contig} {input} > {output}
@@ -263,7 +300,9 @@ rule split_source_genomes_by_contig:
 rule index_source_genome_contigs:
     input: "outputs/source_genome_contigs/{source_genome}-{contig}.fa"
     output: "outputs/bowtie2_index_source_genome_contigs/{source_genome}-{contig}.1.bt2"
-    resources: mem_mb = 2000
+    resources: 
+        mem_mb = 2000,
+        tmpdir=TMPDIR
     params: prefix = lambda wildcards: "outputs/bowtie2_index_source_genome_contigs/" + wildcards.source_genome + "-" + wildcards.contig
     conda: "envs/bowtie2.yml"
     threads: 1
@@ -277,7 +316,9 @@ rule map_reads_to_source_genome_contig:
         fq = "outputs/gs_read_mapping/{source_genome}-{contig}.fq",
     output: "outputs/bowtie2_source_genome_contigs/{source_genome}-{contig}.bam"
     params: prefix = lambda wildcards: "outputs/bowtie2_index_source_genome_contigs/" + wildcards.source_genome + "-" + wildcards.contig
-    resources: mem_mb = 2000
+    resources: 
+        mem_mb = 2000,
+        tmpdir=TMPDIR
     conda: "envs/bowtie2.yml"
     threads: 1
     shell:'''
