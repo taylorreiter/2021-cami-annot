@@ -325,3 +325,17 @@ rule map_reads_to_source_genome_contig:
     bowtie2 -x {params.prefix} --interleaved {input.fq} -p {threads} --end-to-end | \
     samtools view -Sbh --threads {threads} - > {output}
     '''
+
+rule combine_annotations_with_read_mapping_info:
+    input:
+        bam="outputs/bowtie2_source_genome_contigs/{source_genome}-{contig}.bam",
+        gff="outputs/bakta_source_genomes/{source_genome}.gff3"
+    output:"outputs/gs_read_annotations/{source_genome}-{contig}.tsv"
+    resources: 
+        mem_mb = 2000,
+        tmpdir=TMPDIR
+    conda: "envs/bedtools.yml"
+    threads: 1
+    shell:'''
+    intersectBed -a {input.gff} -b {input.bam} -s -bed -wa -wb > {output}
+    '''
