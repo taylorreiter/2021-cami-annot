@@ -11,9 +11,9 @@ DATASETS = ['CAMI_low']
 
 rule all:
     input:
-        expand("outputs/bowtie2/{dataset}_unmapped.fa", dataset = DATASETS),
+        expand("outputs/bowtie2/{dataset}_unmapped_R2.fq", dataset = DATASETS),
         ancient(expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)),
-        expand("outputs/bowtie2_source_genome_contigs/{source_genome_and_contig}.bam", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG) 
+        expand("outputs/gs_read_annotations/{source_genome_and_contig}.tsv", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG) 
 
 #############################################################
 ## Obtaining data
@@ -129,7 +129,7 @@ rule map_reads_to_assembly:
 
 rule identify_unmapped_reads:
     input: "outputs/bowtie2/{dataset}.bam"
-    output: "outputs/bowtie2/{dataset}_unmapped.sam"
+    output: "outputs/bowtie2/{dataset}_unmapped.bam"
     resources: 
         mem_mb = 8000,
         tmpdir=TMPDIR
@@ -137,20 +137,22 @@ rule identify_unmapped_reads:
     threads: 1
     conda: 'envs/bowtie2.yml'
     shell:'''
-    samtools view -f 4 {input} > {output}
+    samtools view -b -f 4 {input} > {output}
     '''
 
 rule convert_unmapped_reads_to_fastq:
-    input: "outputs/bowtie2/{dataset}_unmapped.sam"
-    output: "outputs/bowtie2/{dataset}_unmapped.fa"
+    input:"outputs/bowtie2/{dataset}_unmapped.bam"
+    output: 
+        r1="outputs/bowtie2/{dataset}_unmapped_R1.fq",
+        r2="outputs/bowtie2/{dataset}_unmapped_R2.fq",
     resources: 
         mem_mb = 8000,
         tmpdir=TMPDIR
-    benchmark: "benchmarks/samtools_fasta_{dataset}.txt"
+    benchmark: "benchmarks/samtools_fastq_unmapped_{dataset}.txt"
     conda: 'envs/bowtie2.yml'
     threads: 1
     shell:'''
-    samtools fasta {input} > {output}
+    samtools fastq -1 {output.r1} -2 {output.r2} > {input}
     '''
 
 ############################################################
