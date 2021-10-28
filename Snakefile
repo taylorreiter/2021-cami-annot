@@ -209,24 +209,34 @@ rule decompress_source_genomes:
 rule bakta_source_genomes:
     input: 
         fna=ancient("inputs/CAMI_low/source_genomes/{source_genome}.fna"),
-        db="~/github/2021-orpheum-refseq/inputs/bakta_db/db/version.json"
+        db="/home/tereiter/github/2021-orpheum-refseq/inputs/bakta_db/db/version.json"
     output: 
         "outputs/bakta_source_genomes/{source_genome}.faa",
         "outputs/bakta_source_genomes/{source_genome}.gff3",
         "outputs/bakta_source_genomes/{source_genome}.fna",
     resources: 
-        mem_mb = lambda wildcards, attempt: attempt * 8000 ,
+        mem_mb = lambda wildcards, attempt: attempt * 16000 ,
         tmpdir= TMPDIR
     benchmark: "benchmarks/bakta_{source_genome}.txt"
     conda: 'envs/bakta.yml'
     params: 
-        dbdir="~/github/2021-orpheum-refseq/inputs/bakta_db/db/"
+        dbdir="~/github/2021-orpheum-refseq/inputs/bakta_db/db/",
         outdir = 'outputs/bakta_source_genomes/',
     threads: 1
     shell:'''
     bakta --db {params.dbdir} --prefix {wildcards.source_genome} --output {params.outdir} \
         --locus-tag {wildcards.source_genome} --keep-contig-headers {input.fna}
     '''
+
+rule remove_fasta_from_gff:
+    input: "outputs/bakta_source_genomes/{source_genome}.gff3",
+    output: "outputs/bakta_source_genomes/{source_genome}_no_fasta.gff"
+    resources: 
+        mem_mb = 2000 ,
+        tmpdir= TMPDIR
+    threads: 1
+    conda: "envs/rtracklayer.yml"
+    script: "scripts/remove_fasta_from_gff.R"
 
 rule download_eggnog_db:
     output: "inputs/eggnog_db/eggnog.db"
@@ -331,10 +341,10 @@ rule map_reads_to_source_genome_contig:
 rule combine_annotations_with_read_mapping_info:
     input:
         bam="outputs/bowtie2_source_genome_contigs/{source_genome}-{contig}.bam",
-        gff="outputs/bakta_source_genomes/{source_genome}.gff3"
+        gff="outputs/bakta_source_genomes/{source_genome}_no_fasta.gff"
     output:"outputs/gs_read_annotations/{source_genome}-{contig}.tsv"
     resources: 
-        mem_mb = 2000,
+        mem_mb = 4000,
         tmpdir=TMPDIR
     conda: "envs/bedtools.yml"
     threads: 1
