@@ -229,8 +229,8 @@ rule bakta_source_genomes:
     '''
 
 rule remove_fasta_from_gff:
-    input: "outputs/bakta_source_genomes/{source_genome}.gff3",
-    output: "outputs/bakta_source_genomes/{source_genome}_no_fasta.gff"
+    input: gff="outputs/bakta_source_genomes/{source_genome}.gff3",
+    output: no_fasta="outputs/bakta_source_genomes/{source_genome}_no_fasta.gff"
     resources: 
         mem_mb = 2000 ,
         tmpdir= TMPDIR
