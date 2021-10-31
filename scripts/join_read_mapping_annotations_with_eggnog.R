@@ -13,6 +13,7 @@ eggnog <- files %>%
                                   'KEGG_ko', 'KEGG_Pathway', 'KEGG_Module', 
                                   'KEGG_Reaction', 'KEGG_rclass', 'BRITE',
                                   'KEGG_TC', 'CAZy', 'BiGG_Reaction', 'PFAMs'),
+          col_types = "cccddccccccccccccccccc",
           comment = "#", na = "-", .id = "source_genome") %>%
   mutate(source_genome = gsub("outputs/eggnog_source_genomes/", "", source_genome)) %>%
   mutate(source_genome = gsub("\\.emapper\\.annotations", "", source_genome))

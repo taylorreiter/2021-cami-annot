@@ -356,7 +356,7 @@ rule combine_annotated_reads_per_genome:
     input: tsv=expand("outputs/gs_read_annotations/{source_genome_and_contig}.tsv", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG)
     output: tsv="outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv"
     resources: 
-        mem_mb = 256000,
+        mem_mb = 100000,
         tmpdir=TMPDIR
     conda: "envs/tidyverse.yml"
     threads: 1
@@ -368,7 +368,7 @@ rule combine_annotated_reads_per_genome_with_eggnog:
         eggnog=expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)
     output: tsv="outputs/gs_read_annotations/CAMI_low_gs_read_annotations_with_eggnog.tsv"
     resources: 
-        mem_mb = 256000,
+        mem_mb = 50000,
         tmpdir=TMPDIR
     conda: "envs/tidyverse.yml"
     threads: 1
