@@ -13,7 +13,7 @@ rule all:
     input:
         expand("outputs/bowtie2/{dataset}_unmapped_R2.fq", dataset = DATASETS),
         ancient(expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)),
-        expand("outputs/gs_read_annotations/{source_genome_and_contig}.tsv", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG) 
+        "outputs/outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv"
 
 #############################################################
 ## Obtaining data
@@ -235,8 +235,9 @@ rule remove_fasta_from_gff:
         mem_mb = 2000 ,
         tmpdir= TMPDIR
     threads: 1
-    conda: "envs/rtracklayer.yml"
-    script: "scripts/remove_fasta_from_gff.R"
+    shell:'''
+    sed '/^##FASTA$/,$d' {input} > {output}
+    '''
 
 rule download_eggnog_db:
     output: "inputs/eggnog_db/eggnog.db"
@@ -362,4 +363,5 @@ rule combine_annotated_reads_per_genome:
     threads: 1
     script: "scripts/combine_read_mapping_annotations.R"
 
-rule combine_annotated_reads_per_genome_with_eggnog:
+#rule combine_annotated_reads_per_genome_with_eggnog:
+
