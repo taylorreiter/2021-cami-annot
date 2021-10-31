@@ -152,7 +152,7 @@ rule convert_unmapped_reads_to_fastq:
     conda: 'envs/bowtie2.yml'
     threads: 1
     shell:'''
-    samtools fastq -1 {output.r1} -2 {output.r2} > {input}
+    samtools fastq -N -1 {output.r1} -2 {output.r2} {input}
     '''
 
 ############################################################
@@ -351,3 +351,15 @@ rule combine_annotations_with_read_mapping_info:
     shell:'''
     intersectBed -a {input.gff} -b {input.bam} -s -bed -wa -wb > {output}
     '''
+
+rule combine_annotated_reads_per_genome:
+    input: tsv=expand("outputs/gs_read_annotations/{source_genome_and_contig}.tsv", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG)
+    output: tsv="outputs/outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv"
+    resources: 
+        mem_mb = 256000,
+        tmpdir=TMPDIR
+    conda: "envs/tidyverse.yml"
+    threads: 1
+    script: "scripts/combine_read_mapping_annotations.R"
+
+rule combine_annotated_reads_per_genome_with_eggnog:
