@@ -12,8 +12,7 @@ DATASETS = ['CAMI_low']
 rule all:
     input:
         expand("outputs/bowtie2/{dataset}_unmapped_R2.fq", dataset = DATASETS),
-        ancient(expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)),
-        "outputs/outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv"
+        "outputs/gs_read_annotations/CAMI_low_gs_read_annotations_with_eggnog.tsv"
 
 #############################################################
 ## Obtaining data
@@ -355,7 +354,7 @@ rule combine_annotations_with_read_mapping_info:
 
 rule combine_annotated_reads_per_genome:
     input: tsv=expand("outputs/gs_read_annotations/{source_genome_and_contig}.tsv", source_genome_and_contig = SOURCE_GENOME_AND_CONTIG)
-    output: tsv="outputs/outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv"
+    output: tsv="outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv"
     resources: 
         mem_mb = 256000,
         tmpdir=TMPDIR
@@ -363,5 +362,15 @@ rule combine_annotated_reads_per_genome:
     threads: 1
     script: "scripts/combine_read_mapping_annotations.R"
 
-#rule combine_annotated_reads_per_genome_with_eggnog:
+rule combine_annotated_reads_per_genome_with_eggnog:
+    input: 
+        gs_read_annot="outputs/gs_read_annotations/CAMI_low_gs_read_annotations.tsv",
+        eggnog=expand("outputs/eggnog_source_genomes/{source_genome}.emapper.annotations", source_genome = SOURCE_GENOMES)
+    output: tsv="outputs/gs_read_annotations/CAMI_low_gs_read_annotations_with_eggnog.tsv"
+    resources: 
+        mem_mb = 256000,
+        tmpdir=TMPDIR
+    conda: "envs/tidyverse.yml"
+    threads: 1
+    script: "scripts/join_read_mapping_annotations_with_eggnog.R"
 
